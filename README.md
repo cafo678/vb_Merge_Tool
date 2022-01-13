@@ -2,6 +2,8 @@
 
 Tool for merging togheter vb0 and vb2 vertex files.  
 
+The tool is ready for work with most of FFVII Remake files, but can be that it needs to be adpted to other files.
+
 **How to use**  
 Put the .exe in the same folder as the files to merge and run it, the only requirement is that the vb0 and the vb2 files are next to each other.  
 
@@ -13,8 +15,6 @@ Example:
 - *000294-vb0.txt*
 - *000294vb2.txt*
 - *ecc*
-
-The tool is ready for work with most of FFVII Remake files, but can be that it needs to be adpted to other files.
 
 **How to adapt the tool to your needs**  
 - Open the .sln
