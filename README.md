@@ -25,3 +25,5 @@ Example:
   - ``` const int32_t INDEXTOSKIP = 7; ``` Here the index of the Attribute to skip in the merge
   - ``` string Attributes[]{ "NORMAL", "TANGENT", "POSITION", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "BLENDINDICES", "BLENDINDICES", "BLENDWEIGHT", "BLENDWEIGHT" }; ``` Here the list of the Attributes Names to set
   - Build
+
+**Thanks to @Narknon and to the [OpenFF7R Discord Channel](discord.gg/qdxhFwT3Tr)** 
