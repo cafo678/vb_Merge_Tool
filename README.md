@@ -26,4 +26,4 @@ Example:
   - ``` string Attributes[]{ "NORMAL", "TANGENT", "POSITION", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "BLENDINDICES", "BLENDINDICES", "BLENDWEIGHT", "BLENDWEIGHT" }; ``` Here the list of the Attributes Names to set
   - Build
 
-**Thanks to @Narknon and to the [OpenFF7R Discord Channel](discord.gg/qdxhFwT3Tr)** 
+Thanks to **@Narknon**  and to the ** [OpenFF7R Discord Channel](discord.gg/qdxhFwT3Tr)**   
