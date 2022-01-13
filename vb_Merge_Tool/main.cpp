@@ -7,7 +7,6 @@
 using namespace std;
 using namespace std::filesystem;
 using StringIndexes = pair<string, int32_t>;
-
 int32_t vb0TotalLines, vb2TotalLines;
 fstream vb0Stream, vb2Stream;
 StringIndexes AttSemIdx[] = { make_pair("NORMAL", 0), make_pair("TANGENT", 0), make_pair("POSITION", 0), make_pair("TEXCOORD", 0), make_pair("BLENDINDICES", 0), make_pair("BLENDWEIGHT", 0) };
@@ -288,7 +287,10 @@ int32_t GetLinesNum(fstream& File)
 bool Merge(directory_entry& vb0_File, directory_entry& vb2_File)
 {
     FILE* NewFile = NULL;
-    fopen_s(&NewFile, "new.txt", "w+");
+    create_directory("Merged");
+    string NewFilePath = "Merged/" + path(vb0_File).filename().string();
+    fopen_s(&NewFile, NewFilePath.c_str(), "w+");
+    
     vb0Stream.open(vb0_File);
     vb2Stream.open(vb2_File);
     fstream vb0Clone;
@@ -299,17 +301,13 @@ bool Merge(directory_entry& vb0_File, directory_entry& vb2_File)
     vb2TotalLines = GetLinesNum(vb2Clone);
     vb0Clone.close();
     vb2Clone.close();
-
+    
     int32_t LineStartSecondPart = MergeFirstPart(NewFile);
     
     if (MergeSecondPart(NewFile, LineStartSecondPart))
     {
         vb0Stream.close();
         vb2Stream.close();
-        auto NewFileName = path(vb0_File).filename();
-        remove(vb0_File);
-        remove(vb2_File);
-        rename("new.txt", NewFileName);
         return true;
     }
     else
@@ -317,6 +315,7 @@ bool Merge(directory_entry& vb0_File, directory_entry& vb2_File)
         return false;
     }
     
+    return true;
 }
 
 void ResetGlobals()
@@ -328,12 +327,12 @@ void ResetGlobals()
 }
 
 int main()
-{
+{ 
     Files = GetFiles();
 
     for (auto i = 0; i < Files.size(); i++)
     {
-        if (Is_A(Files[i], "vb0") && Is_A(Files[i + 1], "vb2") && i + 1 < Files.size())
+        if (Is_A(Files[i], "vb0") && Is_A(Files[i + 1], "vb2"))
         {
             if (Merge(Files[i], Files[i + 1]))
             {
@@ -348,5 +347,5 @@ int main()
         }
     }
     cout << "Exiting..." << endl;
-    Sleep(5000);
+    Sleep(3000);
 }
