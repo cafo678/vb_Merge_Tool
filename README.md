@@ -1,6 +1,9 @@
 # vb_Merge_Tool
 
-Tool for merging togheter vb0 and vb2 vertex files.  
+Tool for merging togheter vb0 and vb2 files.  
+
+They are frame analysis files dumped from the game that include data for the 3D models. 
+VB0 is the file that contains the 3D data for each vertex, VB2 contains the weight data for each vertex.
 
 The tool is ready for work with most of FFVII Remake files, but can be that it needs to be adpted to other files.
 
