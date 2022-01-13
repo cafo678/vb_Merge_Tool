@@ -3,22 +3,40 @@
 #include <filesystem>
 #include <stdint.h>
 #include <fstream>
-
 using namespace std;
 using namespace std::filesystem;
-using StringIndexes = pair<string, int32_t>;
-int32_t vb0TotalLines, vb2TotalLines;
+
+const int32_t INDEXTOSKIP = 7;
+string Attributes[]{ "NORMAL", "TANGENT", "POSITION", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "BLENDINDICES", "BLENDINDICES", "BLENDWEIGHT", "BLENDWEIGHT" };
+int32_t vb0CurrentLine, vb0TotalLines, vb2CurrentLine, vb2TotalLines;
 fstream vb0Stream, vb2Stream;
-StringIndexes AttSemIdx[] = { make_pair("NORMAL", 0), make_pair("TANGENT", 0), make_pair("POSITION", 0), make_pair("TEXCOORD", 0), make_pair("BLENDINDICES", 0), make_pair("BLENDWEIGHT", 0) };
-vector<directory_entry> Files;
-const string _Stride {"stride: "};
-const string _VertexData { "vertex-data" };
-const string _Element { "element[" };
-const string _SemName { "  SemanticName: " };
-const string _SemIdx { "  SemanticIndex: " };
-const string _InputSlot { "  InputSlot: " };
-const string _ByteOff { "  AlignedByteOffset: " };
-const string Attributes[] {"NORMAL", "TANGENT", "POSITION", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "_delete_", "BLENDINDICES", "BLENDINDICES", "BLENDWEIGHT", "BLENDWEIGHT"};
+
+namespace Indexes
+{
+    using attidx = pair<string, int32_t>;
+    attidx AttributesIndexes[] = { make_pair("NORMAL", 0), make_pair("TANGENT", 0), make_pair("POSITION", 0), make_pair("TEXCOORD", 0), make_pair("BLENDINDICES", 0), make_pair("BLENDWEIGHT", 0) };
+
+    int32_t FindAndIncrementIndex(string& Attribute)
+    {
+        for (auto& x : AttributesIndexes)
+        {
+            if (x.first == Attribute)
+            {
+                int32_t Index = x.second;
+                x.second++;
+                return Index;
+            }
+        }
+    }
+
+    void Reset()
+    {
+        for (auto& x : AttributesIndexes)
+        {
+            x.second = 0;
+        }
+    }
+}
 
 vector <directory_entry> GetFiles()
 {
@@ -50,285 +68,184 @@ bool Is_A(directory_entry& File, string Type)
     return false;
 }
 
-int32_t GetIntValueFromString(string& Line, const string& StringToCut)
+int32_t GetLinesNum(directory_entry File)
 {
-    int32_t Value;
-    int32_t ValueLineLenght = Line.length();
-    string ValueString = Line.substr(StringToCut.length(), ValueLineLenght - StringToCut.length());
-    stringstream Stream(ValueString);
-    Stream >> Value;
-    return Value;
+    string Line;
+    int32_t Count = 0;
+    fstream Stream;
+    Stream.open(File);
+    while (getline(Stream, Line))
+    {
+        Count++;
+    }
+    Stream.close();
+    return Count;
 }
 
-string GetMergedStrideLine(string vb0StrideLine, string vb2StrideLine)
+void LoopVertexData(FILE* NewFile, fstream& Stream, int32_t& RemainingLines, int32_t& CurrentAttributeIndex, int32_t& CurrentOffset, bool bIs_v0)
 {
-    int32_t vb0Stride = GetIntValueFromString(vb0StrideLine, _Stride);
-    int32_t vb2Stride = GetIntValueFromString(vb2StrideLine, _Stride);
-    int32_t SumStride = vb0Stride + vb2Stride;
-    return _Stride + to_string(SumStride);
+    string Line;
+
+    if (RemainingLines > 1)
+    {
+        while (getline(Stream, Line))
+        {
+            RemainingLines--;
+
+            if (Line.empty())
+                break;
+
+            int32_t IndexLenght = Line.find("]") - 4;
+            int32_t OffsetStart = Line.find("+") + 1;
+            CurrentOffset = bIs_v0 ? stoi(Line.substr(OffsetStart, 3)) : CurrentOffset + 4;
+            int32_t IndexToSet = Indexes::FindAndIncrementIndex(Attributes[CurrentAttributeIndex]);
+            string Tail = Line.substr(Line.find(":"), Line.length());
+
+            if (IndexToSet == 0)
+            {
+                fprintf(NewFile, "vb0[%s]+%03i %s%s\n", Line.substr(4, IndexLenght).c_str(), CurrentOffset, Attributes[CurrentAttributeIndex].c_str(), Tail.c_str());
+            }
+            else
+            {
+                fprintf(NewFile, "vb0[%s]+%03i %s%i%s\n", Line.substr(4, IndexLenght).c_str(), CurrentOffset, Attributes[CurrentAttributeIndex].c_str(), IndexToSet, Tail.c_str());
+            }
+
+            CurrentAttributeIndex++;
+        }
+    }
 }
 
-int32_t GetElementIndex(string& ElementIndexLine)
+void MergeVertexData(FILE* NewFile)
 {
-    string ElementIndexString = ElementIndexLine.substr(_Element.length(), ElementIndexLine.size() - 1);
-    return stoi(ElementIndexString);
+    int32_t vb0RemainingLines = vb0TotalLines - vb0CurrentLine - 1, vb2RemainingLines = vb2TotalLines - vb2CurrentLine - 1, CurrentAttributeIndex = 0, CurrentOffset = 0;
+
+    while (vb0RemainingLines > 1 || vb2RemainingLines > 1)
+    {
+        Indexes::Reset();
+        LoopVertexData(NewFile, vb0Stream, vb0RemainingLines, CurrentAttributeIndex, CurrentOffset, true);
+        LoopVertexData(NewFile, vb2Stream, vb2RemainingLines, CurrentAttributeIndex, CurrentOffset, false);
+        CurrentAttributeIndex = 0;
+        fprintf(NewFile, "\n");
+    }
 }
 
-int32_t MergeFirstPart(FILE* NewFile)
+void MergeHeader(FILE* NewFile)
 {
-    int32_t FirstChunkEndLine = 0,CurrentElementIndex = 0, TempIdx = 0, MaxOffset = 0, Count = 0;
+    int32_t FirstChunkEndLine = 0, CurrentElementIndex = 0, MaxOffset = 0, Count = 0;
     string vb0Line, vb2line;
-    
+
     while (getline(vb0Stream, vb0Line))
     {
         getline(vb2Stream, vb2line);
-        Count++;
+        vb0CurrentLine++; vb2CurrentLine++;
 
-        if (vb0Line.find(string(_VertexData)) != string::npos)
+        if (vb0Line.find("stride:") != string::npos)
         {
-            FirstChunkEndLine = Count;
-            fprintf(NewFile, "%s\n", vb0Line.c_str());
-            break;
-        }
-
-        if (vb0Line.find(string(_Stride)) != string::npos)
-        {
-            string MergedStrideLine = GetMergedStrideLine(vb0Line, vb2line);
-            fprintf(NewFile, "%s\n", MergedStrideLine.c_str());
+            int32_t StrideSum = stoi(vb0Line.substr(8, 2)) + stoi(vb2line.substr(8, 2));
+            fprintf(NewFile, "stride: %i\n", StrideSum);
             continue;
         }
 
-        if (vb0Line.find(string(_Element)) != string::npos)
+        if (vb0Line.find(string("element")) != string::npos)
         {
-            TempIdx = GetElementIndex(vb0Line);
-            CurrentElementIndex = GetElementIndex(vb0Line);
-            if (CurrentElementIndex == 7)
+            if (stoi(vb0Line.substr(8, 1)) == INDEXTOSKIP)
+            {
+                for (int32_t i = 0; i < 8; i++)
+                {
+                    getline(vb0Stream, vb0Line);
+                    getline(vb2Stream, vb2line);
+                    vb0CurrentLine++; vb2CurrentLine++;
+                }
+                fprintf(NewFile, "element[%i]:\n", CurrentElementIndex);
                 continue;
-            if (CurrentElementIndex > 7)
-                TempIdx--;
-            fprintf(NewFile, "%s%i]\n", _Element.c_str(), TempIdx);
+            }
+
+            fprintf(NewFile, "element[%i]:\n", CurrentElementIndex);
             continue;
         }
 
-        if (CurrentElementIndex == 7)
-            continue;
-
-        if (vb0Line.find(string(_SemName)) != string::npos)
+        if (vb0Line.find(string("SemanticName")) != string::npos)
         {
             string AttributeToSet = Attributes[CurrentElementIndex];
-            fprintf(NewFile, "%s%s\n", _SemName.c_str(), AttributeToSet.c_str());
+            fprintf(NewFile, "  SemanticName: %s\n", AttributeToSet.c_str());
             continue;
         }
 
-        if (vb0Line.find(string(_SemIdx)) != string::npos)
+        if (vb0Line.find(string("SemanticIndex")) != string::npos)
         {
-            int32_t IdxToSet = 0;
             string CurrentAttribute = Attributes[CurrentElementIndex];
-            for (auto& x : AttSemIdx)
-            {
-                if (x.first == CurrentAttribute)
-                {
-                    IdxToSet = x.second;
-                    x.second++;
-                }   
-            }
-            fprintf(NewFile, "%s%i\n", _SemIdx.c_str(), IdxToSet);
+            int32_t IdxToSet = Indexes::FindAndIncrementIndex(CurrentAttribute);
+            fprintf(NewFile, "  SemanticIndex: %i\n", IdxToSet);
             continue;
         }
 
-        if (vb0Line.find(string(_InputSlot)) != string::npos)
+        if (vb0Line.find(string("InputSlot")) != string::npos)
         {
-            fprintf(NewFile, "%s0\n", _InputSlot.c_str());
+            fprintf(NewFile, "  InputSlot: 0\n");
             continue;
         }
 
-        if (vb0Line.find(string(_ByteOff)) != string::npos)
+        if (vb0Line.find(string("AlignedByteOffset")) != string::npos)
         {
             int32_t CurrentByteOff;
-            if (CurrentElementIndex > 7)
+            if (CurrentElementIndex > INDEXTOSKIP - 1)
             {
                 MaxOffset += 4;
                 CurrentByteOff = MaxOffset;
             }
             else
             {
-                CurrentByteOff = GetIntValueFromString(vb0Line, _ByteOff);
+                CurrentByteOff = stoi(vb0Line.substr(21, vb0Line.length()));
                 MaxOffset = MaxOffset >= CurrentByteOff ? MaxOffset : CurrentByteOff;
             }
-            fprintf(NewFile, "%s%i\n", _ByteOff.c_str(), CurrentByteOff);
+            CurrentElementIndex++;
+            fprintf(NewFile, "  AlignedByteOffset: %i\n", CurrentByteOff);
             continue;
+        }
+
+        if (vb0Line.find(string("vertex-data")) != string::npos)
+        {
+            FirstChunkEndLine = Count;
+            fprintf(NewFile, "%s\n", vb0Line.c_str());
+            break;
         }
 
         fprintf(NewFile, "%s\n", vb0Line.c_str());
     }
-    return FirstChunkEndLine + 1;
-}
 
-bool MergeSecondPart(FILE* NewFile, int32_t LineToStart)
-{
-    string vb0Line, vb2Line;
-    int32_t vb0CurrentLine = LineToStart, vb2CurrentLine = LineToStart, vb0RemainingLines = vb0TotalLines - LineToStart - 1, vb2RemainingLines = vb2TotalLines - LineToStart - 1, CurrentIndex = 0, CurrentOffset = 0, CurrentAttributeIndex = 0;
-
-    while (vb0RemainingLines > 1 || vb2RemainingLines > 1)
-    {
-        for (auto& x : AttSemIdx)
-        {
-            x.second = 0;
-        }
-
-        if (vb0RemainingLines > 1)
-        {
-            while (getline(vb0Stream, vb0Line))
-            {
-                vb0CurrentLine++;
-                vb0RemainingLines--;
-
-                if (vb0Line.empty())
-                {
-                    break;
-                }
-
-                int32_t StartElementNameIndex = vb0Line.find("ATTRIBUTE");
-                int32_t IndexAfterElementName = vb0Line.find(": ");
-                int32_t IdxToSet = 0;
-                for (auto& x : AttSemIdx)
-                {
-                    if (x.first == Attributes[CurrentAttributeIndex])
-                    {
-                        IdxToSet = x.second;
-                        x.second++;
-                    }
-                }
-
-                int32_t StartOffsetIndex = vb0Line.find("+") + 1;
-                int32_t EndOffsetIndex = StartElementNameIndex - 1;
-                CurrentOffset = stoi(vb0Line.substr(StartOffsetIndex, EndOffsetIndex));
-
-                if (IdxToSet == 0)
-                {
-                    fprintf(NewFile, "%s%s:%s\n", vb0Line.substr(0, StartElementNameIndex).c_str(), Attributes[CurrentAttributeIndex].c_str(), vb0Line.substr(IndexAfterElementName + 1, vb0Line.length() - 1).c_str());
-                }
-                else
-                {
-                    fprintf(NewFile, "%s%s%i:%s\n", vb0Line.substr(0, StartElementNameIndex).c_str(), Attributes[CurrentAttributeIndex].c_str(), IdxToSet, vb0Line.substr(IndexAfterElementName + 1, vb0Line.length() - 1).c_str());
-                }
-
-                CurrentAttributeIndex++;
-
-                if (Attributes[CurrentAttributeIndex] == "_delete_")
-                    CurrentAttributeIndex++;
-            }
-        }
-
-        if (vb2RemainingLines > 1)
-        {
-            while (getline(vb2Stream, vb2Line))
-            {
-                vb2CurrentLine++;
-                vb2RemainingLines--;
-
-                if (vb2Line.empty())
-                {
-                    break;
-                }
-
-                int32_t StartElementNameIndex = vb2Line.find("ATTRIBUTE");
-                int32_t IndexAfterElementName = vb2Line.find(": ");
-                int32_t IdxToSet = 0;
-                for (auto& x : AttSemIdx)
-                {
-                    if (x.first == Attributes[CurrentAttributeIndex])
-                    {
-                        IdxToSet = x.second;
-                        x.second++;
-                    }
-                }
-
-                int32_t StartOffsetIndex = vb2Line.find("+") + 1;
-                int32_t EndOffsetIndex = StartElementNameIndex - 1;
-                CurrentOffset += 4;
-
-                if (IdxToSet == 0)
-                {
-                    fprintf(NewFile, "vb0%s%03i %s:%s\n", vb2Line.substr(3, StartOffsetIndex - 3).c_str(), CurrentOffset, Attributes[CurrentAttributeIndex].c_str(),
-                        vb2Line.substr(IndexAfterElementName + 1, vb2Line.length() - 1).c_str());
-                }
-                else
-                {
-                    fprintf(NewFile, "vb0%s%03i %s%i:%s\n", vb2Line.substr(3, StartOffsetIndex - 3).c_str(), CurrentOffset, Attributes[CurrentAttributeIndex].c_str(), IdxToSet,
-                        vb2Line.substr(IndexAfterElementName + 1, vb2Line.length() - 1).c_str());
-                }
-
-                CurrentAttributeIndex++;
-
-                if (Attributes[CurrentAttributeIndex] == "_delete_")
-                    CurrentAttributeIndex++;
-            }
-            CurrentAttributeIndex = 0;
-            fprintf(NewFile, "\n");
-        }
-    }
-
-    fclose(NewFile);
-    return true;
-}
-
-int32_t GetLinesNum(fstream& File)
-{
-    string Line;
-    int32_t Count = 0;
-    while (getline(File, Line))
-    {
-        Count++;
-    }
-    return Count;
+    vb0CurrentLine++; vb2CurrentLine++;
 }
 
 bool Merge(directory_entry& vb0_File, directory_entry& vb2_File)
 {
+    // Create File
     FILE* NewFile = NULL;
     create_directory("Merged");
     string NewFilePath = "Merged/" + path(vb0_File).filename().string();
     fopen_s(&NewFile, NewFilePath.c_str(), "w+");
-    
+
+    // Open Streams
     vb0Stream.open(vb0_File);
     vb2Stream.open(vb2_File);
-    fstream vb0Clone;
-    fstream vb2Clone;
-    vb0Clone.open(vb0_File);
-    vb2Clone.open(vb2_File);
-    vb0TotalLines = GetLinesNum(vb0Clone);
-    vb2TotalLines = GetLinesNum(vb2Clone);
-    vb0Clone.close();
-    vb2Clone.close();
-    
-    int32_t LineStartSecondPart = MergeFirstPart(NewFile);
-    
-    if (MergeSecondPart(NewFile, LineStartSecondPart))
-    {
-        vb0Stream.close();
-        vb2Stream.close();
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-    
-    return true;
-}
 
-void ResetGlobals()
-{
-    for (auto& x : AttSemIdx)
-    {
-        x.second = 0;
-    }
+    // Get Total Lines
+    vb0TotalLines = GetLinesNum(vb0_File);
+    vb2TotalLines = GetLinesNum(vb2_File);
+
+    // Merge 
+    MergeHeader(NewFile);
+    MergeVertexData(NewFile);
+    
+    // Close File and Streams
+    fclose(NewFile);
+    vb0Stream.close();
+    vb2Stream.close();
+    return true;
 }
 
 int main()
 { 
-    Files = GetFiles();
+    vector<directory_entry> Files = GetFiles();
 
     for (auto i = 0; i < Files.size(); i++)
     {
@@ -336,8 +253,8 @@ int main()
         {
             if (Merge(Files[i], Files[i + 1]))
             {
-                cout << path(Files[i]).filename() << " and " << path(Files[i + 1]).filename() << " merged successfully!" << endl;
-                ResetGlobals();
+                cout << path(Files[i]).filename() << " and " << path(Files[i + 1]).filename() << " merged successfully!" << endl; 
+                Indexes::Reset();
                 i++;
             }
             else
