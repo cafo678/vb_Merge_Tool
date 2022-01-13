@@ -14,6 +14,8 @@ Example:
 - *000294vb2.txt*
 - *ecc*
 
+The tool is ready for work with most of FFVII Remake files, but can be that it needs to be adpted to other files.
+
 **How to adapt the tool to your needs**  
 - Open the .sln
 - Change the following 2 variables:
