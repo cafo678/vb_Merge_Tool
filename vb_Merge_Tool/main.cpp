@@ -179,7 +179,7 @@ void MergeHeader(FILE* NewFile)
             continue;
         }
 
-        if (vb0Line.find(string("InputSlot")) != string::npos)
+        if (vb0Line.find(string("InputSlot:")) != string::npos)
         {
             fprintf(NewFile, "  InputSlot: 0\n");
             continue;
@@ -255,6 +255,7 @@ int main()
             {
                 cout << path(Files[i]).filename() << " and " << path(Files[i + 1]).filename() << " merged successfully!" << endl; 
                 Indexes::Reset();
+                vb0CurrentLine = 0; vb0TotalLines = 0; vb2CurrentLine = 0; vb2TotalLines = 0;
                 i++;
             }
             else
