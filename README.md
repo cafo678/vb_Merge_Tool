@@ -20,10 +20,24 @@ Example:
 - *ecc*
 
 **How to adapt the tool to your needs**  
-- Open the .sln
-- Change the following 2 variables:
-  - ``` const int32_t INDEXTOSKIP = 7; ``` Here the index of the Attribute to skip in the merge
-  - ``` string Attributes[]{ "NORMAL", "TANGENT", "POSITION", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "BLENDINDICES", "BLENDINDICES", "BLENDWEIGHT", "BLENDWEIGHT" }; ``` Here the list of the Attributes Names to set
-  - Build
+- Create a setup.txt file inside the folder where the .exe is located
+- Specify in the files the attributes of the vb0 file INCLUDED the one to skip
+
+Example:
+```
+ATTRIBUTES:  
+NORMAL  
+TANGENT  
+POSITION  
+TEXCOORD  
+TEXCOORD  
+TEXCOORD  
+TEXCOORD  
+BLENDINDICES  
+BLENDINDICES  
+BLENDWEIGHT  
+BLENDWEIGHT 
+```
+By default the tool is setted to use the above attributes, skipping number 7
 
 Thanks to **@Narknon**  and to the **[OpenFF7R Discord Channel](discord.gg/qdxhFwT3Tr)**   
