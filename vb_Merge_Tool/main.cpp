@@ -6,15 +6,36 @@
 using namespace std;
 using namespace std::filesystem;
 
-const int32_t INDEXTOSKIP = 7;
-string Attributes[]{ "NORMAL", "TANGENT", "POSITION", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "BLENDINDICES", "BLENDINDICES", "BLENDWEIGHT", "BLENDWEIGHT" };
+int32_t INDEXTOSKIP = 7;
+vector<string> Attributes { "NORMAL", "TANGENT", "POSITION", "TEXCOORD", "TEXCOORD", "TEXCOORD", "TEXCOORD", "BLENDINDICES", "BLENDINDICES", "BLENDWEIGHT", "BLENDWEIGHT" };
 int32_t vb0CurrentLine, vb0TotalLines, vb2CurrentLine, vb2TotalLines;
 fstream vb0Stream, vb2Stream;
 
 namespace Indexes
 {
     using attidx = pair<string, int32_t>;
-    attidx AttributesIndexes[] = { make_pair("NORMAL", 0), make_pair("TANGENT", 0), make_pair("POSITION", 0), make_pair("TEXCOORD", 0), make_pair("BLENDINDICES", 0), make_pair("BLENDWEIGHT", 0) };
+    vector<attidx> AttributesIndexes;
+
+    void SetupAttributesIndexes()
+    {
+        for (const auto Attribute : Attributes)
+        {
+            bool bAlreadyExists = false;
+
+            for (const auto AttributeIndex : AttributesIndexes)
+            {
+                if (AttributeIndex.first == Attribute)
+                {
+                    bAlreadyExists = true;
+                }
+            }
+
+            if (!bAlreadyExists)
+            {
+                AttributesIndexes.push_back(make_pair(Attribute, 0));
+            }
+        }
+    }
 
     int32_t FindAndIncrementIndex(string& Attribute)
     {
@@ -54,18 +75,16 @@ vector <directory_entry> GetFiles()
 
 bool Is_A(directory_entry& File, string Type)
 {
-    string FileName = path(File).filename().string();
-    auto FileNameLenght = FileName.length();
+    string FileName = path(File).filename().string(); 
 
-    for (auto i = 0; i < FileNameLenght; i++)
+    if (FileName.find(Type) != string::npos)
     {
-        if (FileName[i] == '-')
-        {
-            if (FileName.substr(i + 1, 3) == Type)
-                return true;
-        }
+        return true;
     }
-    return false;
+    else
+    {
+        return false;
+    }
 }
 
 int32_t GetLinesNum(directory_entry File)
@@ -243,9 +262,58 @@ bool Merge(directory_entry& vb0_File, directory_entry& vb2_File)
     return true;
 }
 
+void Setup(directory_entry SetupFile)
+{
+    fstream SetupStream;
+    string Line;
+    int32_t Index = 0;
+    bool bAttributes = false;
+    SetupStream.open(SetupFile);
+    Attributes.empty();
+
+    while (getline(SetupStream, Line))
+    {
+        if (bAttributes)
+        {
+            Attributes[Index] = Line;
+            Index++;
+        }
+
+        if (Line.find("INDEXTOSKIP") != string::npos)
+        {
+            INDEXTOSKIP = stoi(Line.substr(12, 1));
+        }
+
+        if (Line.find("ATTRIBUTES") != string::npos)
+        {
+            bAttributes = true;
+        }
+    }
+
+    SetupStream.close();
+}
+
 int main()
 { 
     vector<directory_entry> Files = GetFiles();
+    bool bSetup = false;
+
+    for (auto File : Files)
+    {
+        if (Is_A(File, "setup") || Is_A(File, "Setup"))
+        {
+            Setup(File);
+            bSetup = true;
+            break;
+        }
+    }
+
+    if (!bSetup)
+    {
+        cout << "Setup.txt not found, using defaults." << endl;
+    }
+
+    Indexes::SetupAttributesIndexes();
 
     for (auto i = 0; i < Files.size(); i++)
     {
@@ -264,6 +332,7 @@ int main()
             }
         }
     }
+
     cout << "Exiting..." << endl;
-    Sleep(3000);
+    Sleep(30000);
 }
